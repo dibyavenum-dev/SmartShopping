@@ -1,0 +1,31 @@
+# Maven
+target/
+**/target/
+
+# Eclipse
+.classpath
+.project
+.settings/
+.factorypath
+
+# Spring Tool Suite
+.springBeans
+
+# IntelliJ
+.idea/
+*.iml
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+application-local.properties
+application-secret.properties
+
+# Eclipse workspace metadata
+.metadata/
