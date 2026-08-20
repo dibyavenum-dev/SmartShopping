@@ -15,15 +15,18 @@ public class JwtService {
 
     private final SecretKey secretKey;
     private final long expiration;
+    private final long refreshExpiration;
 
     public JwtService(
             @Value("${jwt.secret}") String secret,
-            @Value("${jwt.expiration}") long expiration) {
+            @Value("${jwt.expiration}") long expiration,
+            @Value("${jwt.refresh-expiration}") long refreshExpiration) {
 
         this.secretKey = Keys.hmacShaKeyFor(
                 secret.getBytes());
 
         this.expiration = expiration;
+        this.refreshExpiration = refreshExpiration;
     }
 
     public String generateToken(String username) {
@@ -66,5 +69,20 @@ public class JwtService {
 
             return false;
         }
+    }
+    
+    public String generateRefreshToken(String username) {
+
+        Date now = new Date();
+
+        Date expiryDate =
+                new Date(now.getTime() + refreshExpiration);
+
+        return Jwts.builder()
+                .subject(username)
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(secretKey)
+                .compact();
     }
 }
