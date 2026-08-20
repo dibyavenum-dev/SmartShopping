@@ -3,6 +3,7 @@ package com.smartshopping.paymentservice.controller;
 import org.springframework.web.bind.annotation.*;
 
 import com.smartshopping.paymentservice.entity.Payment;
+import com.smartshopping.paymentservice.exception.PaymentNotFoundException;
 import com.smartshopping.paymentservice.repository.PaymentRepository;
 
 @RestController
@@ -28,6 +29,6 @@ public class PaymentController {
 
         return paymentRepository.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Payment not found"));
+                        new PaymentNotFoundException("Payment not found"));
     }
 }

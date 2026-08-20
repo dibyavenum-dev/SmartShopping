@@ -1,1386 +1,1068 @@
-\# SmartShopping
+# SmartShopping
 
+SmartShopping is a microservices-based e-commerce application built using Java, Spring Boot, Spring Cloud, MySQL, JWT, Apache Kafka, and Docker.
 
+The application is divided into independent microservices for authentication, products, orders, payments, inventory, and notifications.
 
-SmartShopping is a microservices-based e-commerce application built using Java, Spring Boot, Spring Cloud, MySQL, JWT and Apache Kafka.
+---
 
-
-
-The application is divided into independent microservices for authentication, products, orders, payments, inventory and notifications.
-
-
-
-\---
-
-
-
-\## Architecture
-
-
+## Architecture
 
 ```text
-
-&#x20;                        Client / Postman
-
-&#x20;                               |
-
-&#x20;                               v
-
-&#x20;                   +-----------------------+
-
-&#x20;                   |     API Gateway       |
-
-&#x20;                   |       :8080           |
-
-&#x20;                   |   JWT Authentication  |
-
-&#x20;                   +-----------+-----------+
-
-&#x20;                               |
-
-&#x20;                               v
-
-&#x20;                   +-----------------------+
-
-&#x20;                   |    Eureka Server      |
-
-&#x20;                   |       :8761           |
-
-&#x20;                   |   Service Discovery   |
-
-&#x20;                   +-----------+-----------+
-
-&#x20;                               |
-
-&#x20;         +---------------------+----------------------+
-
-&#x20;         |                     |                      |
-
-&#x20;         v                     v                      v
-
-&#x20;  Auth Service          Product Service         Order Service
-
-&#x20;     :8081                   :8082                     |
-
-&#x20;         |                                             |
-
-&#x20;         v                                             |
-
-&#x20;      MySQL                                            |
-
-&#x20;                                                       |
-
-&#x20;                                                       v
-
-&#x20;                                                    Kafka
-
-&#x20;                                                       |
-
-&#x20;                                     +-----------------+----------------+
-
-&#x20;                                     |                                  |
-
-&#x20;                                     v                                  v
-
-&#x20;                             Payment Service                    Other Consumers
-
-&#x20;                                     |
-
-&#x20;                                     v
-
-&#x20;                             Payment Event
-
-&#x20;                                     |
-
-&#x20;                                     v
-
-&#x20;                                   Kafka
-
-&#x20;                                     |
-
-&#x20;                                     v
-
-&#x20;                             Order Service
-
-
-
+                         Client / Postman
+                                |
+                                v
+                     +----------------------+
+                     |     API Gateway      |
+                     |        :8080         |
+                     |    JWT Validation    |
+                     +----------+-----------+
+                                |
+                                v
+                     +----------------------+
+                     |    Eureka Server     |
+                     |        :8761         |
+                     |   Service Discovery  |
+                     +----------+-----------+
+                                |
+              +-----------------+------------------+
+              |                 |                  |
+              v                 v                  v
+       Auth Service      Product Service      Order Service
+          :8081                :8082                 |
+              |                   |                  |
+              v                   v                  |
+            MySQL               MySQL                |
+                                                     |
+                                                     | REST
+                                                     v
+                                             Product Service
+                                                     |
+                                                     |
+                                                     v
+                                                   Kafka
+                                                     |
+                         +---------------------------+-------------------------+
+                         |                           |                         |
+                         v                           v                         v
+                  Payment Service             Inventory Service       Notification Service
+                         |
+                         | payment-processed
+                         v
+                       Kafka
+                         |
+                         v
+                  Notification Service
 Microservices
-
 Service	Responsibility	Port
-
 Service Registry	Eureka service discovery	8761
-
 API Gateway	Central entry point, routing and JWT validation	8080
-
 Auth Service	User registration, login and JWT generation	8081
-
 Product Service	Product CRUD operations	8082
-
-Order Service	Order management and order events	-
-
-Payment Service	Payment processing	-
-
-Inventory Service	Inventory management	-
-
-Notification Service	Notification processing	-
-
+Order Service	Order management and Kafka event publishing	-
+Payment Service	Payment processing and Kafka event publishing	-
+Inventory Service	Inventory event processing	-
+Notification Service	Order and payment notification processing	-
 Technologies Used
-
 Java 21
-
 Spring Boot
-
 Spring Cloud
-
 Spring Cloud Gateway
-
 Netflix Eureka
-
 Spring Security
-
 JWT
-
 BCrypt
-
 Spring Data JPA
-
 MySQL
-
 Apache Kafka
-
 Spring Kafka
-
 RestTemplate
-
+Docker
+Docker Compose
 Maven
-
 Git
-
 GitHub
-
 Postman
-
-1\. Service Registry
-
-
+1. Service Registry
 
 The Service Registry is implemented using Netflix Eureka.
 
-
+Eureka runs on:
 
 http://localhost:8761
-
-
 
 The microservices register themselves with Eureka.
 
-
-
 Example configuration:
 
-
-
 eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
-
 eureka.client.register-with-eureka=true
-
 eureka.client.fetch-registry=true
-
-
 
 Eureka allows services to discover each other without directly hardcoding service host and port information.
 
-
-
-2\. API Gateway
-
-
+2. API Gateway
 
 The API Gateway runs on:
 
-
-
 http://localhost:8080
-
-
 
 Spring Cloud Gateway is used as the centralized entry point for client requests.
 
-
-
 The Gateway performs:
 
-
-
 Request routing
-
 Eureka-based service discovery
-
 JWT validation
-
 Authentication filtering
-
 Gateway Routes
-
-/auth/\*\*           -> AUTH-SERVICE
-
-
-
-
-
-/products/\*\*       -> PRODUCT-SERVICE
-
-
-
-
-
-/orders/\*\*         -> ORDER-SERVICE
-
-
-
-
-
-/payments/\*\*       -> PAYMENT-SERVICE
-
-
-
-
-
-/inventory/\*\*      -> INVENTORY-SERVICE
-
-
-
-
-
-/notifications/\*\*  -> NOTIFICATION-SERVICE
-
-
+/auth/**           -> AUTH-SERVICE
+/products/**       -> PRODUCT-SERVICE
+/orders/**         -> ORDER-SERVICE
+/payments/**       -> PAYMENT-SERVICE
+/inventory/**      -> INVENTORY-SERVICE
+/notifications/**  -> NOTIFICATION-SERVICE
 
 Example Gateway configuration:
 
+spring.cloud.gateway.server.webflux.routes[0].id=product-service
+spring.cloud.gateway.server.webflux.routes[0].uri=lb://PRODUCT-SERVICE
+spring.cloud.gateway.server.webflux.routes[0].predicates[0]=Path=/products/**
 
+The lb:// URI allows the Gateway to locate the service through Eureka service discovery and load balancing.
 
-spring.cloud.gateway.server.webflux.routes\[0].id=product-service
-
-spring.cloud.gateway.server.webflux.routes\[0].uri=lb://PRODUCT-SERVICE
-
-spring.cloud.gateway.server.webflux.routes\[0].predicates\[0]=Path=/products/\*\*
-
-
-
-The lb:// URI allows the Gateway to locate the service through service discovery and load balancing.
-
-
-
-3\. Authentication Service
-
-
+3. Authentication Service
 
 The Auth Service is responsible for:
 
-
-
 User registration
-
 User login
-
 Password encryption
-
 Password validation
-
 JWT generation
-
 Authentication
-
-
 
 Port:
 
-
-
 8081
-
-
 
 Database:
 
-
-
-auth\_db
-
+auth_db
 User Registration
-
-
 
 API:
 
-
-
 POST /auth/register
-
-
 
 Example request:
 
-
-
 {
-
-&#x20;   "username": "dibya123",
-
-&#x20;   "email": "dibya123@gmail.com",
-
-&#x20;   "password": "1234"
-
+  "username": "dibya123",
+  "email": "dibya123@gmail.com",
+  "password": "1234"
 }
-
-
 
 The raw password is never stored directly.
 
-
-
 The password is encrypted using BCrypt:
-
-
 
 passwordEncoder.encode(password)
 
-
-
 The encrypted password is stored in MySQL.
-
-
 
 User Login
 
-
-
 API:
 
-
-
 POST /auth/login
-
-
 
 Example request:
 
-
-
 {
-
-&#x20;   "username": "dibya123",
-
-&#x20;   "password": "1234"
-
+  "username": "dibya123",
+  "password": "1234"
 }
-
-
 
 The Auth Service:
 
-
-
 Finds the user.
-
 Validates the password using BCrypt.
-
 Generates a JWT.
-
 Returns the JWT to the client.
+4. JWT Authentication
 
-4\. JWT Authentication
+JWT is used to secure the protected microservices.
 
-
-
-JWT is used to secure the microservices.
-
-
-
-The authentication flow is:
-
-
-
+Authentication Flow
 Register
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 Password encrypted using BCrypt
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 MySQL
-
-
-
-Login:
-
-
-
-Login Request
-
-&#x20;    |
-
-&#x20;    v
-
-Auth Service
-
-&#x20;    |
-
-&#x20;    v
-
-Validate Username + Password
-
-&#x20;    |
-
-&#x20;    v
-
-Generate JWT
-
-&#x20;    |
-
-&#x20;    v
-
-Return JWT
-
-
-
-For protected APIs:
-
-
-
+Login Flow
 Client
-
-&#x20;  |
-
-&#x20;  | Authorization: Bearer <JWT>
-
-&#x20;  v
-
+  |
+  | POST /auth/login
+  v
 API Gateway
-
-&#x20;  |
-
-&#x20;  v
-
+  |
+  v
+Auth Service
+  |
+  v
+Validate Username + Password
+  |
+  v
+Generate JWT
+  |
+  v
+Return JWT
+Protected API Flow
+Client
+  |
+  | Authorization: Bearer <JWT>
+  v
+API Gateway
+  |
+  v
 JWT Validation
-
-&#x20;  |
-
-&#x20;  +---- Invalid/No Token ----> 401 Unauthorized
-
-&#x20;  |
-
-&#x20;  v
-
+  |
+  +---- Invalid/No Token ----> 401 Unauthorized
+  |
+  v
 Eureka
-
-&#x20;  |
-
-&#x20;  v
-
+  |
+  v
 Target Microservice
 
-
-
-The following authentication APIs are accessible without an existing JWT:
-
-
+The following APIs are accessible without an existing JWT:
 
 POST /auth/register
-
 POST /auth/login
-
-
 
 Protected APIs require a valid JWT.
 
-
-
-5\. Product Service
-
-
+5. Product Service
 
 The Product Service manages products.
 
-
-
 Port:
 
-
-
 8082
-
-
 
 Database:
 
-
-
-product\_db
-
-
+product_db
 
 Base path:
 
-
-
 /products
-
 APIs
-
 Create Product
-
 POST /products
-
 Get All Products
-
 GET /products
-
 Get Product By ID
-
 GET /products/{id}
-
 Update Product
-
 PUT /products/{id}
-
 Delete Product
-
 DELETE /products/{id}
-
 Product Fields
-
 id
-
 name
-
 description
-
 price
-
 quantity
-
 category
 
+The Product Service uses Spring Data JPA.
 
-
-The Product Service uses Spring Data JPA:
-
-
+Example:
 
 public interface ProductRepository
-
-&#x20;       extends JpaRepository<Product, Long> {
-
+        extends JpaRepository<Product, Long> {
 }
-
-6\. Order Service
-
-
+6. Order Service
 
 The Order Service is responsible for order management.
 
-
-
 It contains:
 
-
-
 Controller
-
 Service
-
 Repository
-
 Entity
-
 DTO
-
 Producer
-
-Consumer
-
 Event
-
-Kafka Configuration
-
-RestTemplate Configuration
-
-
+Kafka configuration
+RestTemplate configuration
 
 The Order Service uses both:
 
-
-
-REST communication
-
-Kafka event-based communication
-
-7\. Kafka Integration
-
-
-
-Apache Kafka is used for asynchronous event communication.
-
-
-
-The Order Service contains Kafka-related components such as:
-
-
-
-KafkaProducerConfig
-
-OrderEventProducer
-
-PaymentEventConsumer
-
-OrderCreatedEvent
-
-PaymentProcessedEvent
-
-Order Event Flow
-
-
+Synchronous REST communication
+Asynchronous Kafka event communication
+Order Creation Flow
 
 When an order is created:
 
+Order Service gets product information from Product Service using REST.
+The total price is calculated.
+The order is saved in the database.
+An OrderCreatedEvent is created.
+A unique event ID is generated.
+The event is published to Kafka.
 
+Example event:
+
+OrderCreatedEvent
+
+
+eventId
+orderId
+productId
+quantity
+totalPrice
+7. Kafka Integration
+
+Apache Kafka is used for asynchronous event communication between microservices.
+
+Kafka is running using Docker Compose.
+
+Kafka image:
+
+apache/kafka:4.0.0
+
+Kafka ports:
+
+9092 - Kafka broker
+9093 - Kafka controller
+Kafka Topics
+
+The application uses topics including:
+
+order-created
+payment-processed
+
+Retry and Dead Letter topics are also created for retry-enabled consumers.
+
+Examples:
+
+order-created-retry
+order-created.DLT
+8. Order Created Event Flow
+
+When an order is created:
 
 Order Service
+     |
+     | OrderCreatedEvent
+     v
+   Kafka
+     |
+     +-----------------------+-----------------------+
+     |                       |                       |
+     v                       v                       v
+Payment Service       Inventory Service      Notification Service
 
-&#x20;     |
-
-&#x20;     | OrderCreatedEvent
-
-&#x20;     v
-
-&#x20;   Kafka
-
-&#x20;     |
-
-&#x20;     v
+The same order-created event can be consumed independently by multiple consumer groups.
 
 Payment Service
 
+Payment Service consumes:
 
+order-created
 
-After payment processing:
+using:
 
+payment-group
 
+It checks whether a payment already exists for the order.
+
+If the payment does not already exist:
+
+Payment created
+     |
+     v
+Payment status = SUCCESS
+     |
+     v
+PaymentProcessedEvent
+     |
+     v
+Kafka
+9. Payment Event Flow
+
+Payment Service publishes:
+
+payment-processed
+
+The event contains:
+
+eventId
+paymentId
+orderId
+amount
+status
+
+Notification Service consumes the event using:
+
+notification-payment-group
+
+If the payment status is SUCCESS, the Notification Service processes the payment-success notification.
+
+Flow:
+
+Payment Service
+      |
+      | PaymentProcessedEvent
+      v
+    Kafka
+      |
+      v
+Notification Service
+      |
+      v
+Payment Successful Notification
+10. Inventory Service
+
+The Inventory Service consumes the:
+
+order-created
+
+Kafka topic.
+
+It uses a separate consumer group:
+
+inventory-group
+
+The Inventory Service receives:
+
+orderId
+productId
+quantity
+totalPrice
+
+This demonstrates how multiple independent services can consume the same Kafka event.
+
+11. Notification Service
+
+The Notification Service consumes events from Kafka.
+
+It has two event consumers.
+
+Order Created Consumer
+
+Consumes:
+
+order-created
+
+using:
+
+notification-group
+
+It checks whether the event was already processed.
+
+The processed event ID is stored so duplicate events can be ignored.
+
+Example:
+
+Event already processed
+        |
+        v
+Duplicate event ignored
+Payment Notification Consumer
+
+Consumes:
+
+payment-processed
+
+using:
+
+notification-payment-group
+
+When payment status is SUCCESS, it processes the payment-success notification.
+
+12. Kafka Retry and Dead Letter Topic
+
+The Payment Service uses Kafka retry handling.
+
+Example:
+
+@RetryableTopic(
+    attempts = "3",
+    dltTopicSuffix = ".DLT"
+)
+
+If processing fails, Kafka retries the message before sending it to the Dead Letter Topic.
+
+Flow:
+
+Kafka Event
+    |
+    v
+Consumer
+    |
+    X Processing Failed
+    |
+    v
+Retry
+    |
+    X Failed Again
+    |
+    v
+Retry
+    |
+    X Failed Again
+    |
+    v
+DLT
+
+The Payment Service has a DLT handler for failed OrderCreatedEvent messages.
+
+The Notification Service order-event consumer also uses retry and DLT handling.
+
+13. Duplicate Event Handling
+
+Kafka consumers can potentially receive the same event more than once.
+
+The application demonstrates idempotent processing.
 
 Payment Service
 
-&#x20;     |
+Before creating a payment, it checks:
 
-&#x20;     | PaymentProcessedEvent
+orderId
 
-&#x20;     v
+If a payment already exists for that order, the event is ignored.
 
-&#x20;   Kafka
+Notification Service
 
-&#x20;     |
+The Notification Service stores processed event IDs.
 
-&#x20;     v
+Before processing:
 
-Order Service
+existsById(event.getEventId())
 
+If the event already exists:
 
+Duplicate event ignored
 
-This allows services to communicate asynchronously through events.
+This prevents duplicate processing.
 
-
-
-8\. REST Communication
-
-
+14. REST Communication
 
 The application also uses synchronous REST communication where required.
 
-
-
-The Order Service contains:
-
-
-
-RestTemplateConfig
-
-
-
-and uses RestTemplate for REST-based communication.
-
-
-
-Therefore, the application demonstrates both communication approaches:
-
-
-
-Synchronous:
-
-Service A
-
-&#x20;  |
-
-&#x20;  | REST / RestTemplate
-
-&#x20;  v
-
-Service B
-
-
-
-and:
-
-
-
-Asynchronous:
-
-Service A
-
-&#x20;  |
-
-&#x20;  | Event
-
-&#x20;  v
-
-&#x20;Kafka
-
-&#x20;  |
-
-&#x20;  v
-
-Service B
-
-9\. Payment Service
-
-
-
-The Payment Service is responsible for payment processing.
-
-
-
-It participates in the order/payment event flow using Kafka.
-
-
-
-Basic flow:
-
-
-
-Order Created
-
-&#x20;    |
-
-&#x20;    v
-
-&#x20;  Kafka
-
-&#x20;    |
-
-&#x20;    v
-
-Payment Service
-
-&#x20;    |
-
-&#x20;    v
-
-Payment Processing
-
-&#x20;    |
-
-&#x20;    v
-
-PaymentProcessedEvent
-
-&#x20;    |
-
-&#x20;    v
-
-&#x20;  Kafka
-
-10\. Inventory Service
-
-
-
-The Inventory Service is responsible for inventory-related operations.
-
-
-
-It is registered with Eureka and can be accessed through the API Gateway.
-
-
-
-Gateway path:
-
-
-
-/inventory/\*\*
-
-11\. Notification Service
-
-
-
-The Notification Service handles notification-related functionality.
-
-
-
-It is registered with Eureka and can be accessed through the API Gateway.
-
-
-
-Gateway path:
-
-
-
-/notifications/\*\*
-
-12\. MySQL Configuration
-
-
+The Order Service uses RestTemplate to communicate with Product Service.
+
+Example:
+
+restTemplate.getForObject(
+    "http://PRODUCT-SERVICE/products/" + order.getProductId(),
+    ProductResponse.class
+);
+
+The service name:
+
+PRODUCT-SERVICE
+
+is resolved through Eureka.
+
+Therefore, the application demonstrates both communication approaches.
+
+Synchronous Communication
+Order Service
+     |
+     | REST / RestTemplate
+     v
+Product Service
+Asynchronous Communication
+Order Service
+     |
+     | Event
+     v
+Kafka
+     |
+     +----------+----------+
+     |          |          |
+     v          v          v
+ Payment    Inventory   Notification
+15. MySQL Configuration
 
 The application uses MySQL for persistence.
 
-
-
 Example databases:
 
-
-
-auth\_db
-
-product\_db
-
-
+auth_db
+product_db
+order_db
+payment_db
 
 Database passwords are externalized using environment variables.
 
-
-
 Example:
 
-
-
-spring.datasource.password=${DB\_PASSWORD}
-
-
+spring.datasource.password=${DB_PASSWORD}
 
 The actual database password should not be stored in GitHub.
 
-
-
-13\. Environment Variables
-
-
+16. Environment Variables
 
 Sensitive configuration is kept outside the source code.
 
+Examples:
 
-
-Example:
-
-
-
-DB\_PASSWORD
-
-JWT\_SECRET
-
-
+DB_PASSWORD
+JWT_SECRET
 
 Application configuration uses:
 
-
-
-${DB\_PASSWORD}
-
-
+spring.datasource.password=${DB_PASSWORD}
 
 and:
 
-
-
-${JWT\_SECRET}
-
-
+jwt.secret=${JWT_SECRET}
 
 This prevents sensitive credentials from being committed to the repository.
 
+17. Docker and Docker Compose
 
+Docker is used to run Kafka for the SmartShopping application.
 
-14\. Complete Request Flow
+The Docker Compose file is located at:
 
+D:\SmartShopping\docker-compose.yml
+
+Kafka is started using:
+
+docker compose up -d
+
+Kafka container:
+
+kafka
+
+Kafka image:
+
+apache/kafka:4.0.0
+
+Ports:
+
+9092
+9093
+
+Docker Compose creates and manages the Kafka data volume:
+
+smartshopping_kafka-data
+Verify Kafka
+
+Check running containers:
+
+docker ps
+
+Check Kafka logs:
+
+docker logs kafka
+
+Stop the SmartShopping Kafka container:
+
+docker compose stop
+
+Start it again:
+
+docker compose up -d
+
+Do not use:
+
+docker compose down -v
+
+unless you intentionally want to remove Compose-managed volumes.
+
+18. Complete Request Flow
 Public Authentication Flow
-
 Postman
-
-&#x20;  |
-
-&#x20;  | POST /auth/login
-
-&#x20;  v
-
+   |
+   | POST /auth/login
+   v
 API Gateway :8080
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 Eureka
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 Auth Service :8081
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 MySQL
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 JWT
-
-Protected API Flow
-
+   |
+   v
 Postman
-
-&#x20;  |
-
-&#x20;  | Authorization: Bearer <JWT>
-
-&#x20;  v
-
+Protected API Flow
+Postman
+   |
+   | Authorization: Bearer <JWT>
+   v
 API Gateway :8080
-
-&#x20;  |
-
-&#x20;  | JWT Validation
-
-&#x20;  v
-
+   |
+   | JWT Validation
+   v
 Eureka
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 Target Microservice
-
-Order and Payment Flow
-
+Complete Order Flow
 Client
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 API Gateway
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 Order Service
-
-&#x20;  |
-
-&#x20;  | OrderCreatedEvent
-
-&#x20;  v
-
-&#x20;Kafka
-
-&#x20;  |
-
-&#x20;  v
-
-Payment Service
-
-&#x20;  |
-
-&#x20;  | PaymentProcessedEvent
-
-&#x20;  v
-
-&#x20;Kafka
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   | REST
+   v
+Product Service
+   |
+   | Product details
+   v
 Order Service
+   |
+   | Save Order
+   |
+   | OrderCreatedEvent
+   v
+Kafka
+   |
+   +-------------------+-------------------+
+   |                   |                   |
+   v                   v                   v
+Payment             Inventory          Notification
+Service              Service             Service
+   |
+   | PaymentProcessedEvent
+   v
+Kafka
+   |
+   v
+Notification Service
+19. End-to-End Order Processing
 
-15\. How to Run the Project
+The complete tested flow is:
 
+1. User logs in
+        |
+        v
+2. JWT is generated
+        |
+        v
+3. JWT is sent with protected request
+        |
+        v
+4. Gateway validates JWT
+        |
+        v
+5. Order request reaches Order Service
+        |
+        v
+6. Order Service gets product details
+   from Product Service using REST
+        |
+        v
+7. Order is saved
+        |
+        v
+8. OrderCreatedEvent is published to Kafka
+        |
+        +-------------------+-------------------+
+        |                   |                   |
+        v                   v                   v
+9. Payment Service    Inventory Service   Notification Service
+        |
+        v
+10. Payment is created
+        |
+        v
+11. PaymentProcessedEvent is published
+        |
+        v
+12. Notification Service consumes event
+        |
+        v
+13. Payment success notification is processed
 
+This complete end-to-end flow has been tested successfully.
 
-Start the application components in the following order.
-
-
-
+20. How to Run the Project
 Step 1 - Start MySQL
-
-
 
 Make sure MySQL is running and the required databases are available.
 
+Step 2 - Start Kafka
 
+Go to the SmartShopping root directory:
 
-Step 2 - Start Service Registry
+cd /d D:\SmartShopping
 
+Start Kafka:
 
+docker compose up -d
+
+Verify:
+
+docker ps
+
+Kafka should be running on:
+
+localhost:9092
+Step 3 - Start Service Registry
 
 Start:
-
-
 
 service-registry
 
-
-
 Verify Eureka:
 
-
-
 http://localhost:8761
-
-Step 3 - Start Auth Service
-
-
+Step 4 - Start Auth Service
 
 Start:
-
-
 
 auth-service
 
-
-
 Port:
 
-
-
 8081
-
-Step 4 - Start Product Service
-
-
+Step 5 - Start Product Service
 
 Start:
-
-
 
 product-service
 
-
-
 Port:
 
-
-
 8082
-
-Step 5 - Start Other Microservices
-
-
+Step 6 - Start Other Microservices
 
 Start:
-
-
 
 order-service
-
 payment-service
-
 inventory-service
-
 notification-service
-
-Step 6 - Start API Gateway
-
-
+Step 7 - Start API Gateway
 
 Start:
-
-
 
 api-gateway
 
-
-
 Port:
 
-
-
 8080
-
-16\. Testing With Postman
-
-
+21. Testing With Postman
 
 Recommended testing sequence:
 
+1. Register User
+       |
+       v
+2. Login
+       |
+       v
+3. Receive JWT
+       |
+       v
+4. Add JWT to Authorization header
+       |
+       v
+5. Test Product APIs
+       |
+       v
+6. Create Order
+       |
+       v
+7. Verify Payment Event
+       |
+       v
+8. Verify Inventory Event
+       |
+       v
+9. Verify Notification Event
 
+Authorization header:
 
-1\. Register User
-
-&#x20;      |
-
-&#x20;      v
-
-2\. Login
-
-&#x20;      |
-
-&#x20;      v
-
-3\. Receive JWT
-
-&#x20;      |
-
-&#x20;      v
-
-4\. Add JWT to Authorization header
-
-&#x20;      |
-
-&#x20;      v
-
-5\. Call Product / Order / Payment APIs
-
-
-
-Example:
-
-
-
-Authorization: Bearer <JWT\_TOKEN>
-
+Authorization: Bearer <JWT_TOKEN>
 Security Test
-
-
 
 Without token:
 
-
-
 Request
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 Gateway
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 401 Unauthorized
 
-
-
-With valid token:
-
-
+With a valid token:
 
 Request
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 Gateway
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 JWT Validation
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 Microservice
-
-&#x20;  |
-
-&#x20;  v
-
+   |
+   v
 Successful Response
-
-17\. Project Structure
-
+22. Project Structure
 SmartShopping
-
 │
-
 ├── README.md
-
 ├── .gitignore
-
+├── docker-compose.yml
 │
-
 ├── api-gateway
-
 │   └── src
-
 │
-
 ├── auth-service
-
 │   └── src
-
 │
-
 ├── inventory-service
-
 │   └── src
-
 │
-
 ├── notification-service
-
 │   └── src
-
 │
-
 ├── order-service
-
 │   └── src
-
 │
-
 ├── payment-service
-
 │   └── src
-
 │
-
 ├── product-service
-
 │   └── src
-
 │
-
 └── service-registry
-
-&#x20;   └── src
-
-18\. Key Microservices Concepts Demonstrated
-
-
+    └── src
+23. Key Microservices Concepts Demonstrated
 
 This project demonstrates:
 
-
-
 Microservices Architecture
-
 Service Discovery using Eureka
-
 API Gateway
-
 JWT Authentication
-
 Spring Security
-
 BCrypt Password Hashing
-
 REST APIs
-
 RestTemplate
-
 Apache Kafka
-
 Event-driven communication
-
+Kafka Consumer Groups
+Kafka Retry
+Dead Letter Topics
+Idempotent Event Processing
 Spring Data JPA
-
 MySQL
-
-Maven
-
+Docker
+Docker Compose
 Environment-based configuration
-
-Git and GitHub
-
-19\. Git Workflow
-
-
+Maven
+Git
+GitHub
+24. Git Workflow
 
 The project is maintained using Git and GitHub.
 
-
-
 Basic workflow:
-
-
 
 git status
 
-
-
-
+Add changes:
 
 git add .
 
-
-
-
+Commit changes:
 
 git commit -m "Your commit message"
 
-
-
-
+Push changes:
 
 git push
-
-
-
-The repository is backed up on GitHub.
-
-
-
-20\. Security
-
-
+25. Security
 
 Never commit sensitive information such as:
 
-
-
 Database passwords
-
 JWT secrets
-
 API keys
-
 Personal Access Tokens
-
-
 
 Use environment variables instead.
 
-
-
 Example:
 
+spring.datasource.password=${DB_PASSWORD}
+jwt.secret=${JWT_SECRET}
 
+Sensitive configuration should never be committed to GitHub.
 
-spring.datasource.password=${DB\_PASSWORD}
+26. Project Highlights
 
-jwt.secret=${JWT\_SECRET}
+SmartShopping demonstrates a complete microservices-based e-commerce workflow using both synchronous and asynchronous communication.
 
+The project includes:
+
+Java
+   |
+Spring Boot
+   |
+Spring Cloud
+   |
+Eureka
+   |
+API Gateway
+   |
+JWT + Spring Security
+   |
+MySQL
+   |
+Kafka
+   |
+Docker
+
+The project was tested end-to-end with:
+
+Authentication
+      ↓
+JWT
+      ↓
+API Gateway
+      ↓
+Order Service
+      ↓
+Product Service
+      ↓
+Kafka
+      ↓
+Payment Service
+      ↓
+Inventory Service
+      ↓
+Notification Service
+Conclusion
+
+SmartShopping is a practical microservices project demonstrating how multiple Spring Boot services can work together using Eureka for service discovery, API Gateway for centralized routing and security, JWT for authentication, MySQL for persistence, RestTemplate for synchronous communication, Apache Kafka for asynchronous event-driven communication, and Docker Compose for Kafka infrastructure.
+
+The complete order, payment, inventory, and notification event flow has been tested successfully.

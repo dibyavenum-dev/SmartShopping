@@ -4,6 +4,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.smartshopping.authservice.entity.User;
+import com.smartshopping.authservice.exception.UserAlreadyExistsException;
+import com.smartshopping.authservice.exception.UserNotFoundException;
 import com.smartshopping.authservice.repository.UserRepository;
 
 @Service
@@ -23,7 +25,8 @@ public class AuthService {
     public User register(String username, String email, String password) {
 
         if (userRepository.findByUsername(username).isPresent()) {
-            throw new RuntimeException("Username already exists");
+        	throw new UserAlreadyExistsException(
+        	        "Username already exists");
         }
 
         User user = new User();
@@ -45,7 +48,7 @@ public class AuthService {
 
         return userRepository.findByUsername(username)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                new UserNotFoundException("User not found"));
     }
 
     public boolean validatePassword(

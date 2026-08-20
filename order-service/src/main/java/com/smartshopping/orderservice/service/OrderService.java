@@ -9,8 +9,8 @@ import org.springframework.web.client.RestTemplate;
 import com.smartshopping.orderservice.dto.ProductResponse;
 import com.smartshopping.orderservice.entity.Order;
 import com.smartshopping.orderservice.event.OrderCreatedEvent;
+import com.smartshopping.orderservice.exception.OrderNotFoundException;
 import com.smartshopping.orderservice.producer.OrderEventProducer;
-import com.smartshopping.orderservice.repository.OrderRepository;
 import com.smartshopping.orderservice.repository.OrderRepository;
 
 @Service
@@ -36,7 +36,7 @@ public class OrderService {
         );
 
         if (product == null) {
-            throw new RuntimeException("Product not found");
+            throw new OrderNotFoundException("Product not found");
         }
 
         double totalPrice =
@@ -72,7 +72,7 @@ public class OrderService {
     public Order getOrderById(Long id) {
         return orderRepository.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException(
+                        new OrderNotFoundException(
                                 "Order not found: " + id));
     }
 

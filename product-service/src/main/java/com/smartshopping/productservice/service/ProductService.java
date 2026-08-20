@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.smartshopping.productservice.entity.Product;
+import com.smartshopping.productservice.exception.ProductNotFoundException;
 import com.smartshopping.productservice.repository.ProductRepository;
 
 @Service
@@ -25,11 +26,13 @@ public class ProductService {
     }
 
     public Product getProductById(Long id) {
+
         return productRepository.findById(id)
                 .orElseThrow(() ->
-                    new RuntimeException("Product not found: " + id));
+                    new ProductNotFoundException(
+                        "Product not found: " + id));
     }
-
+    
     public Product updateProduct(Long id, Product product) {
 
         Product existingProduct = getProductById(id);
