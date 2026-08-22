@@ -3,9 +3,11 @@ package com.smartshopping.authservice.service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.smartshopping.authservice.entity.RefreshToken;
 import com.smartshopping.authservice.entity.User;
 import com.smartshopping.authservice.exception.UserAlreadyExistsException;
 import com.smartshopping.authservice.exception.UserNotFoundException;
+import com.smartshopping.authservice.repository.RefreshTokenRepository;
 import com.smartshopping.authservice.repository.UserRepository;
 
 @Service
@@ -13,13 +15,16 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-
+    private final RefreshTokenRepository refreshTokenRepository;
+    
     public AuthService(
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            RefreshTokenRepository refreshTokenRepository) {
 
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     public User register(String username, String email, String password) {
@@ -58,5 +63,38 @@ public class AuthService {
         return passwordEncoder.matches(
                 rawPassword,
                 encodedPassword);
+    }
+    
+    public void saveRefreshToken(
+            String token,
+            String username) {
+
+        RefreshToken refreshToken =
+                new RefreshToken(
+                        token,
+                        username,
+                        false);
+
+        refreshTokenRepository.save(refreshToken);
+    }
+    
+    public boolean isRefreshTokenRevoked(String token) {
+
+        return refreshTokenRepository
+                .findByToken(token)
+                .map(RefreshToken::isRevoked)
+                .orElse(true);
+    }
+    
+    public void revokeRefreshToken(String token) {
+
+        refreshTokenRepository
+                .findByToken(token)
+                .ifPresent(refreshToken -> {
+
+                    refreshToken.setRevoked(true);
+
+                    refreshTokenRepository.save(refreshToken);
+                });
     }
 }

@@ -68,6 +68,10 @@ public class AuthController {
                 jwtService.generateRefreshToken(
                         user.getUsername());
 
+        authService.saveRefreshToken(
+                refreshToken,
+                user.getUsername());
+
         AuthResponse response =
                 new AuthResponse(
                         accessToken,
@@ -111,6 +115,12 @@ public class AuthController {
                         .body("Invalid token type");
             }
 
+            if (authService.isRefreshTokenRevoked(refreshToken)) {
+                return ResponseEntity
+                        .status(401)
+                        .body("Refresh token is revoked");
+            }
+
             String username =
                     jwtService.extractUsername(refreshToken);
 
@@ -125,5 +135,16 @@ public class AuthController {
                     .status(401)
                     .body("Invalid or expired refresh token");
         }
+    }
+    
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(
+            @RequestBody RefreshTokenRequest request) {
+
+        authService.revokeRefreshToken(
+                request.getRefreshToken());
+
+        return ResponseEntity.ok(
+                "Logout successful");
     }
   }
