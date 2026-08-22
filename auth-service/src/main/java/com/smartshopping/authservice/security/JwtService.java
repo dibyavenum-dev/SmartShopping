@@ -29,7 +29,7 @@ public class JwtService {
         this.refreshExpiration = refreshExpiration;
     }
 
-    public String generateToken(String username) {
+    public String generateToken(String username, String role) {
 
         Date now = new Date();
 
@@ -38,6 +38,8 @@ public class JwtService {
 
         return Jwts.builder()
                 .subject(username)
+                .claim("role", role)
+                .claim("type", "ACCESS")
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(secretKey)
