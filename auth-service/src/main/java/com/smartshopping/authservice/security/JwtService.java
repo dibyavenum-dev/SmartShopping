@@ -80,9 +80,20 @@ public class JwtService {
 
         return Jwts.builder()
                 .subject(username)
+                .claim("type", "REFRESH")
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(secretKey)
                 .compact();
+    }
+    
+    public String extractTokenType(String token) {
+
+        return Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("type", String.class);
     }
 }

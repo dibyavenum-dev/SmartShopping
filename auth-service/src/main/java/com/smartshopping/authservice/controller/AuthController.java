@@ -6,6 +6,7 @@ import org.springframework.security.core.Authentication;
 
 import com.smartshopping.authservice.dto.AuthResponse;
 import com.smartshopping.authservice.dto.LoginRequest;
+import com.smartshopping.authservice.dto.RefreshTokenRequest;
 import com.smartshopping.authservice.dto.RegisterRequest;
 import com.smartshopping.authservice.entity.User;
 import com.smartshopping.authservice.security.JwtService;
@@ -88,14 +89,26 @@ public class AuthController {
     
     @PostMapping("/refresh")
     public ResponseEntity<?> refreshToken(
-            @RequestParam String refreshToken) {
+            @RequestBody RefreshTokenRequest request) {
 
         try {
+
+            String refreshToken =
+                    request.getRefreshToken();
 
             if (!jwtService.isTokenValid(refreshToken)) {
                 return ResponseEntity
                         .status(401)
                         .body("Invalid or expired refresh token");
+            }
+
+            String tokenType =
+                    jwtService.extractTokenType(refreshToken);
+
+            if (!"REFRESH".equals(tokenType)) {
+                return ResponseEntity
+                        .status(401)
+                        .body("Invalid token type");
             }
 
             String username =
@@ -113,4 +126,4 @@ public class AuthController {
                     .body("Invalid or expired refresh token");
         }
     }
-}
+  }
