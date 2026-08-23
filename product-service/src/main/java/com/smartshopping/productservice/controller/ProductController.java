@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.*;
 import com.smartshopping.productservice.entity.Product;
 import com.smartshopping.productservice.service.ProductService;
 
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/products")
 public class ProductController {
@@ -21,7 +23,7 @@ public class ProductController {
 
     @PostMapping
     public ResponseEntity<Product> createProduct(
-            @RequestBody Product product) {
+    		@Valid @RequestBody Product product) {
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -46,7 +48,7 @@ public class ProductController {
     @PutMapping("/{id}")
     public ResponseEntity<Product> updateProduct(
             @PathVariable Long id,
-            @RequestBody Product product) {
+            @Valid @RequestBody Product product) {
 
         return ResponseEntity.ok(
                 productService.updateProduct(id, product));

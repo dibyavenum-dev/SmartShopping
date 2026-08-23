@@ -3,11 +3,15 @@ package com.smartshopping.apigateway.security;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import reactor.core.publisher.Mono;
 
@@ -15,9 +19,14 @@ import reactor.core.publisher.Mono;
 public class JwtAuthenticationFilter implements GlobalFilter {
 
     private final JwtService jwtService;
+    private final ObjectMapper objectMapper;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(
+            JwtService jwtService,
+            ObjectMapper objectMapper) {
+
         this.jwtService = jwtService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -34,7 +43,7 @@ public class JwtAuthenticationFilter implements GlobalFilter {
                 exchange.getRequest()
                         .getMethod();
 
-        // Auth APIs should be publicly accessible
+        // Auth APIs are publicly accessible
         if (path.startsWith("/auth/")) {
             return chain.filter(exchange);
         }
@@ -48,7 +57,10 @@ public class JwtAuthenticationFilter implements GlobalFilter {
         if (authorizationHeader == null ||
                 !authorizationHeader.startsWith("Bearer ")) {
 
-            return unauthorized(exchange);
+            return errorResponse(
+                    exchange,
+                    HttpStatus.UNAUTHORIZED,
+                    "Authentication token is required");
         }
 
         String token =
@@ -57,15 +69,24 @@ public class JwtAuthenticationFilter implements GlobalFilter {
         // Invalid or expired JWT
         if (!jwtService.isTokenValid(token)) {
 
-            return unauthorized(exchange);
+            return errorResponse(
+                    exchange,
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid or expired token");
         }
 
         String role;
 
         try {
+
             role = jwtService.extractRole(token);
+
         } catch (Exception e) {
-            return unauthorized(exchange);
+
+            return errorResponse(
+                    exchange,
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid token");
         }
 
         /*
@@ -81,7 +102,10 @@ public class JwtAuthenticationFilter implements GlobalFilter {
             if (HttpMethod.GET.equals(method)) {
 
                 if (!hasAnyRole(role, "USER", "ADMIN")) {
-                    return forbidden(exchange);
+                    return errorResponse(
+                            exchange,
+                            HttpStatus.FORBIDDEN,
+                            "Access denied");
                 }
 
             } else if (HttpMethod.POST.equals(method)
@@ -89,7 +113,10 @@ public class JwtAuthenticationFilter implements GlobalFilter {
                     || HttpMethod.DELETE.equals(method)) {
 
                 if (!"ADMIN".equals(role)) {
-                    return forbidden(exchange);
+                    return errorResponse(
+                            exchange,
+                            HttpStatus.FORBIDDEN,
+                            "Access denied");
                 }
             }
         }
@@ -102,7 +129,11 @@ public class JwtAuthenticationFilter implements GlobalFilter {
         if (path.startsWith("/orders")) {
 
             if (!hasAnyRole(role, "USER", "ADMIN")) {
-                return forbidden(exchange);
+
+                return errorResponse(
+                        exchange,
+                        HttpStatus.FORBIDDEN,
+                        "Access denied");
             }
         }
 
@@ -124,25 +155,48 @@ public class JwtAuthenticationFilter implements GlobalFilter {
         return false;
     }
 
-    private Mono<Void> unauthorized(
-            ServerWebExchange exchange) {
+    private Mono<Void> errorResponse(
+            ServerWebExchange exchange,
+            HttpStatus status,
+            String message) {
+
+        GatewayErrorResponse error =
+                new GatewayErrorResponse(
+                        status.value(),
+                        message);
+
+        String json;
+
+        try {
+
+            json = objectMapper.writeValueAsString(error);
+
+        } catch (JsonProcessingException e) {
+
+            json = "{\"status\":"
+                    + status.value()
+                    + ",\"message\":\""
+                    + message
+                    + "\"}";
+        }
 
         exchange.getResponse()
-                .setStatusCode(
-                        HttpStatus.UNAUTHORIZED);
-
-        return exchange.getResponse()
-                .setComplete();
-    }
-
-    private Mono<Void> forbidden(
-            ServerWebExchange exchange) {
+                .setStatusCode(status);
 
         exchange.getResponse()
-                .setStatusCode(
-                        HttpStatus.FORBIDDEN);
+                .getHeaders()
+                .setContentType(
+                        MediaType.APPLICATION_JSON);
+
+        byte[] bytes =
+                json.getBytes(
+                        java.nio.charset.StandardCharsets.UTF_8);
 
         return exchange.getResponse()
-                .setComplete();
+                .writeWith(
+                        Mono.just(
+                                exchange.getResponse()
+                                        .bufferFactory()
+                                        .wrap(bytes)));
     }
 }

@@ -6,9 +6,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.smartshopping.orderservice.dto.OrderRequest;
 import com.smartshopping.orderservice.entity.Order;
 import com.smartshopping.orderservice.producer.OrderEventProducer;
 import com.smartshopping.orderservice.service.OrderService;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/orders")
@@ -24,7 +27,12 @@ public class OrderController {
 
     @PostMapping
     public ResponseEntity<Order> createOrder(
-            @RequestBody Order order) {
+            @Valid @RequestBody OrderRequest request) {
+
+        Order order = new Order();
+
+        order.setProductId(request.getProductId());
+        order.setQuantity(request.getQuantity());
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)

@@ -12,6 +12,8 @@ import com.smartshopping.authservice.entity.User;
 import com.smartshopping.authservice.security.JwtService;
 import com.smartshopping.authservice.service.AuthService;
 
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -29,7 +31,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(
-            @RequestBody RegisterRequest request) {
+    		@Valid @RequestBody RegisterRequest request) {
 
     	User user = authService.register(
     	        request.getUsername(),
@@ -43,7 +45,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(
-            @RequestBody LoginRequest request) {
+    		@Valid @RequestBody LoginRequest request) {
 
         User user =
                 authService.findByUsername(
@@ -94,7 +96,7 @@ public class AuthController {
     
     @PostMapping("/refresh")
     public ResponseEntity<?> refreshToken(
-            @RequestBody RefreshTokenRequest request) {
+    		@Valid @RequestBody RefreshTokenRequest request) {
 
         try {
 
@@ -145,7 +147,7 @@ public class AuthController {
     
     @PostMapping("/logout")
     public ResponseEntity<?> logout(
-            @RequestBody RefreshTokenRequest request) {
+    		@Valid @RequestBody RefreshTokenRequest request) {
 
         authService.revokeRefreshToken(
                 request.getRefreshToken());
