@@ -4,12 +4,14 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import com.smartshopping.orderservice.dto.ProductResponse;
 import com.smartshopping.orderservice.entity.Order;
 import com.smartshopping.orderservice.event.OrderCreatedEvent;
 import com.smartshopping.orderservice.exception.OrderNotFoundException;
+import com.smartshopping.orderservice.exception.ProductNotFoundException;
 import com.smartshopping.orderservice.producer.OrderEventProducer;
 import com.smartshopping.orderservice.repository.OrderRepository;
 
@@ -30,13 +32,28 @@ public class OrderService {
 
     public Order createOrder(Order order) {
 
-        ProductResponse product = restTemplate.getForObject(
-                "http://PRODUCT-SERVICE/products/" + order.getProductId(),
-                ProductResponse.class
-        );
+        ProductResponse product;
+
+        try {
+
+            product = restTemplate.getForObject(
+                    "http://PRODUCT-SERVICE/products/"
+                            + order.getProductId(),
+                    ProductResponse.class
+            );
+
+        } catch (HttpClientErrorException.NotFound e) {
+
+            throw new ProductNotFoundException(
+                    "Product not found: "
+                    + order.getProductId());
+        }
 
         if (product == null) {
-            throw new OrderNotFoundException("Product not found");
+
+            throw new ProductNotFoundException(
+                    "Product not found: "
+                    + order.getProductId());
         }
 
         double totalPrice =
@@ -45,21 +62,24 @@ public class OrderService {
         order.setTotalPrice(totalPrice);
         order.setStatus("CREATED");
 
-        // 1. Save order
-        Order savedOrder = orderRepository.save(order);
+        // Save order
+        Order savedOrder =
+                orderRepository.save(order);
 
-        // 2. Create Kafka event
-        OrderCreatedEvent event = new OrderCreatedEvent(
-                savedOrder.getId(),
-                savedOrder.getProductId(),
-                savedOrder.getQuantity(),
-                savedOrder.getTotalPrice()
-        );
-        
-        // 3. Generate unique event ID
-        event.setEventId(UUID.randomUUID().toString());
-        
-        // 3. Publish event
+        // Create Kafka event
+        OrderCreatedEvent event =
+                new OrderCreatedEvent(
+                        savedOrder.getId(),
+                        savedOrder.getProductId(),
+                        savedOrder.getQuantity(),
+                        savedOrder.getTotalPrice()
+                );
+
+        // Generate unique event ID
+        event.setEventId(
+                UUID.randomUUID().toString());
+
+        // Publish event
         orderEventProducer.sendOrderCreatedEvent(event);
 
         return savedOrder;
