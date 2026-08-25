@@ -15,7 +15,9 @@ public class PaymentRequest {
 
     @NotBlank(message = "Payment method is required")
     private String paymentMethod;
-
+    
+    private String status;
+    
     public PaymentRequest() {
     }
 
@@ -42,4 +44,12 @@ public class PaymentRequest {
     public void setPaymentMethod(String paymentMethod) {
         this.paymentMethod = paymentMethod;
     }
+    
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+	public String getStatus() {
+		return status;
+	}
 }

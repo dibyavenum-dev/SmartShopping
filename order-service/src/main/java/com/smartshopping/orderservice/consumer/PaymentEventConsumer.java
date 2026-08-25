@@ -46,6 +46,20 @@ public class PaymentEventConsumer {
 	                    + " is already FAILED. "
 	                    + "Payment status update skipped.");
 
+	        } else if ("PAYMENT_FAILED".equals(order.getStatus())) {
+
+	            System.out.println(
+	                    "Order " + event.getOrderId()
+	                    + " is already PAYMENT_FAILED. "
+	                    + "Payment success update skipped.");
+
+	        } else if ("CANCELLED".equals(order.getStatus())) {
+
+	            System.out.println(
+	                    "Order " + event.getOrderId()
+	                    + " is already CANCELLED. "
+	                    + "Payment success update skipped.");
+
 	        } else {
 
 	            order.setStatus("PAID");
@@ -55,6 +69,46 @@ public class PaymentEventConsumer {
 	            System.out.println(
 	                    "Order " + event.getOrderId()
 	                    + " status updated to PAID");
+	        }
+
+	    } else if ("FAILED".equals(event.getStatus())) {
+
+	        Order order = orderRepository.findById(event.getOrderId())
+	                .orElseThrow(() ->
+	                        new RuntimeException(
+	                                "Order not found: "
+	                                        + event.getOrderId()));
+
+	        if ("FAILED".equals(order.getStatus())) {
+
+	            System.out.println(
+	                    "Order " + event.getOrderId()
+	                    + " is already FAILED. "
+	                    + "Payment failure update skipped.");
+
+	        } else if ("CANCELLED".equals(order.getStatus())) {
+
+	            System.out.println(
+	                    "Order " + event.getOrderId()
+	                    + " is already CANCELLED. "
+	                    + "Payment failure update skipped.");
+
+	        } else if ("PAID".equals(order.getStatus())) {
+
+	            System.out.println(
+	                    "Order " + event.getOrderId()
+	                    + " is already PAID. "
+	                    + "Payment failure update skipped.");
+
+	        } else {
+
+	            order.setStatus("PAYMENT_FAILED");
+
+	            orderRepository.save(order);
+
+	            System.out.println(
+	                    "Order " + event.getOrderId()
+	                    + " status updated to PAYMENT_FAILED");
 	        }
 	    }
 	}
