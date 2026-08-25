@@ -10,6 +10,7 @@ import org.springframework.web.client.RestTemplate;
 import com.smartshopping.orderservice.dto.ProductResponse;
 import com.smartshopping.orderservice.entity.Order;
 import com.smartshopping.orderservice.event.OrderCreatedEvent;
+import com.smartshopping.orderservice.exception.OrderCancellationException;
 import com.smartshopping.orderservice.exception.OrderNotFoundException;
 import com.smartshopping.orderservice.exception.ProductNotFoundException;
 import com.smartshopping.orderservice.producer.OrderEventProducer;
@@ -111,5 +112,32 @@ public class OrderService {
     public void deleteOrder(Long id) {
         Order existingOrder = getOrderById(id);
         orderRepository.delete(existingOrder);
+    }
+    
+    public Order cancelOrder(Long id) {
+
+        Order order = getOrderById(id);
+
+        if ("PAID".equals(order.getStatus())) {
+
+            throw new OrderCancellationException(
+                    "Paid order cannot be cancelled");
+        }
+
+        if ("FAILED".equals(order.getStatus())) {
+
+            throw new OrderCancellationException(
+                    "Failed order cannot be cancelled");
+        }
+
+        if ("CANCELLED".equals(order.getStatus())) {
+
+            throw new OrderCancellationException(
+                    "Order is already cancelled");
+        }
+
+        order.setStatus("CANCELLED");
+
+        return orderRepository.save(order);
     }
 }

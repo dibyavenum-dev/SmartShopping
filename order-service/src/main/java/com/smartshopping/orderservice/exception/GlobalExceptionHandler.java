@@ -1,5 +1,6 @@
 package com.smartshopping.orderservice.exception;
 
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -73,5 +74,21 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(error);
+    }
+    
+    @ExceptionHandler(OrderCancellationException.class)
+    public ResponseEntity<ValidationErrorResponse> handleOrderCancellationException(
+            OrderCancellationException ex) {
+
+        ValidationErrorResponse response =
+                new ValidationErrorResponse();
+
+        response.setStatus(409);
+        response.setMessage(ex.getMessage());
+        response.setTimestamp(LocalDateTime.now());
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(response);
     }
 }

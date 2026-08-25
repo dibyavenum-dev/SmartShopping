@@ -78,4 +78,12 @@ public class OrderController {
 
         return "Test events sent";
     }
+    
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<Order> cancelOrder(
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(
+                orderService.cancelOrder(id));
+    }
 }
