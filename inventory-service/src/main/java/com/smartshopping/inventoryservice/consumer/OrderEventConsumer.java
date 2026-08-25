@@ -5,18 +5,26 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.RetryableTopic;
 import org.springframework.stereotype.Service;
 
+import com.smartshopping.inventoryservice.event.InventoryFailedEvent;
 import com.smartshopping.inventoryservice.event.OrderCreatedEvent;
+import com.smartshopping.inventoryservice.exception.InsufficientStockException;
+import com.smartshopping.inventoryservice.exception.InventoryNotFoundException;
+import com.smartshopping.inventoryservice.producer.InventoryEventProducer;
 import com.smartshopping.inventoryservice.service.InventoryService;
 
 @Service
 public class OrderEventConsumer {
 	private final InventoryService inventoryService;
+	private final InventoryEventProducer inventoryEventProducer;
 
 	public OrderEventConsumer(
-	        InventoryService inventoryService) {
+	        InventoryService inventoryService,
+	        InventoryEventProducer inventoryEventProducer) {
 
 	    this.inventoryService = inventoryService;
+	    this.inventoryEventProducer = inventoryEventProducer;
 	}
+	
 	@RetryableTopic(
 	        attempts = "3",
 	        dltTopicSuffix = ".DLT"
@@ -28,14 +36,33 @@ public class OrderEventConsumer {
 	public void consumeOrderCreatedEvent(
 	        OrderCreatedEvent event) {
 
-    	inventoryService.reserveStock(
-    	        event.getProductId(),
-    	        event.getQuantity());
+	    try {
 
-    	System.out.println(
-    	        "Stock reserved successfully for Product ID: "
-    	                + event.getProductId());
-    }
+	        inventoryService.reserveStock(
+	                event.getProductId(),
+	                event.getQuantity());
+
+	        System.out.println(
+	                "Stock reserved successfully for Product ID: "
+	                        + event.getProductId());
+
+	    } catch (InsufficientStockException
+	            | InventoryNotFoundException e) {
+
+	        InventoryFailedEvent failedEvent =
+	                new InventoryFailedEvent(
+	                        event.getOrderId(),
+	                        event.getProductId(),
+	                        event.getQuantity(),
+	                        e.getMessage());
+
+	        inventoryEventProducer
+	                .sendInventoryFailedEvent(failedEvent);
+
+	        // Re-throw so @RetryableTopic handles the failure
+	        throw e;
+	    }
+	}
 	
 	@DltHandler
 	public void handleDlt(OrderCreatedEvent event) {

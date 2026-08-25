@@ -16,7 +16,7 @@ public class PaymentEventConsumer {
 	}
 	@KafkaListener(
 	        topics = "payment-processed",
-	        groupId = "order-payment-group"
+	        containerFactory = "paymentKafkaListenerContainerFactory"
 	)
 	public void consumePaymentProcessedEvent(
 	        PaymentProcessedEvent event) {
@@ -30,20 +30,32 @@ public class PaymentEventConsumer {
 	    System.out.println("Amount: " + event.getAmount());
 	    System.out.println("Status: " + event.getStatus());
 	    System.out.println("===============================");
+
 	    if ("SUCCESS".equals(event.getStatus())) {
 
 	        Order order = orderRepository.findById(event.getOrderId())
 	                .orElseThrow(() ->
 	                        new RuntimeException(
-	                                "Order not found: " + event.getOrderId()));
+	                                "Order not found: "
+	                                        + event.getOrderId()));
 
-	        order.setStatus("PAID");
+	        if ("FAILED".equals(order.getStatus())) {
 
-	        orderRepository.save(order);
+	            System.out.println(
+	                    "Order " + event.getOrderId()
+	                    + " is already FAILED. "
+	                    + "Payment status update skipped.");
 
-	        System.out.println(
-	                "Order " + event.getOrderId()
-	                + " status updated to PAID");
+	        } else {
+
+	            order.setStatus("PAID");
+
+	            orderRepository.save(order);
+
+	            System.out.println(
+	                    "Order " + event.getOrderId()
+	                    + " status updated to PAID");
+	        }
 	    }
 	}
 }
