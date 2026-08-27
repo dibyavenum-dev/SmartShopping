@@ -1,5 +1,11 @@
 package com.smartshopping.orderservice.consumer;
 
+import java.nio.charset.StandardCharsets;
+
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
@@ -9,6 +15,13 @@ import com.smartshopping.orderservice.repository.OrderRepository;
 
 @Service
 public class InventoryFailedEventConsumer {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(
+                    InventoryFailedEventConsumer.class);
+
+    private static final String CORRELATION_ID =
+            "X-Correlation-Id";
 
     private final OrderRepository orderRepository;
 
@@ -20,43 +33,86 @@ public class InventoryFailedEventConsumer {
 
     @KafkaListener(
             topics = "inventory-failed",
-            containerFactory = "inventoryFailedKafkaListenerContainerFactory"
+            containerFactory =
+                    "inventoryFailedKafkaListenerContainerFactory"
     )
     public void consumeInventoryFailedEvent(
-            InventoryFailedEvent event) {
+            ConsumerRecord<String, InventoryFailedEvent> record) {
 
-        Order order =
-                orderRepository.findById(event.getOrderId())
-                        .orElse(null);
+        String correlationId = null;
 
-        if (order == null) {
+        if (record.headers().lastHeader(CORRELATION_ID) != null) {
 
-            System.err.println(
-                    "Order not found: "
-                            + event.getOrderId());
-
-            return;
+            correlationId = new String(
+                    record.headers()
+                            .lastHeader(CORRELATION_ID)
+                            .value(),
+                    StandardCharsets.UTF_8);
         }
 
-        if (!"FAILED".equals(order.getStatus())) {
+        try {
 
-            order.setStatus("FAILED");
+            MDC.put(
+                    CORRELATION_ID,
+                    correlationId != null
+                            ? correlationId
+                            : "UNKNOWN");
 
-            orderRepository.save(order);
+            InventoryFailedEvent event =
+                    record.value();
 
-            System.out.println(
-                    "Order marked as FAILED. Order ID: "
-                            + event.getOrderId());
+            log.info(
+                    "Inventory failed event received. "
+                            + "Correlation ID: {}, "
+                            + "Order ID: {}, "
+                            + "Product ID: {}, "
+                            + "Quantity: {}, "
+                            + "Reason: {}",
+                    correlationId,
+                    event.getOrderId(),
+                    event.getProductId(),
+                    event.getQuantity(),
+                    event.getReason());
 
-            System.out.println(
-                    "Reason: " + event.getReason());
+            Order order =
+                    orderRepository.findById(
+                            event.getOrderId())
+                    .orElse(null);
 
-        } else {
+            if (order == null) {
 
-            System.out.println(
-                    "Order " + event.getOrderId()
-                            + " is already FAILED. "
-                            + "Duplicate inventory failure event ignored.");
+                log.error(
+                        "Order not found: {}",
+                        event.getOrderId());
+
+                return;
+            }
+
+            if (!"FAILED".equals(order.getStatus())) {
+
+                order.setStatus("FAILED");
+
+                orderRepository.save(order);
+
+                log.info(
+                        "Order marked as FAILED. Order ID: {}",
+                        event.getOrderId());
+
+                log.info(
+                        "Reason: {}",
+                        event.getReason());
+
+            } else {
+
+                log.info(
+                        "Order {} is already FAILED. "
+                                + "Duplicate inventory failure event ignored.",
+                        event.getOrderId());
+            }
+
+        } finally {
+
+            MDC.remove(CORRELATION_ID);
         }
     }
 }

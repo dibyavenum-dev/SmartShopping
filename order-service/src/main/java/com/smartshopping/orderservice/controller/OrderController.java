@@ -12,11 +12,14 @@ import com.smartshopping.orderservice.producer.OrderEventProducer;
 import com.smartshopping.orderservice.service.OrderService;
 
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/orders")
 public class OrderController {
-
+	private static final Logger log =
+	        LoggerFactory.getLogger(OrderController.class);
     private final OrderService orderService;
     private final OrderEventProducer orderEventProducer;
 
@@ -49,6 +52,8 @@ public class OrderController {
     @GetMapping("/{id}")
     public ResponseEntity<Order> getOrderById(
             @PathVariable Long id) {
+
+        log.info("Fetching order with ID: {}", id);
 
         return ResponseEntity.ok(
                 orderService.getOrderById(id));

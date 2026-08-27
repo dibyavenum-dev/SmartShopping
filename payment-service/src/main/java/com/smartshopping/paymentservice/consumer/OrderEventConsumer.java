@@ -1,33 +1,27 @@
 package com.smartshopping.paymentservice.consumer;
 
+import java.nio.charset.StandardCharsets;
+
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
 import org.springframework.stereotype.Service;
 
-import com.smartshopping.paymentservice.entity.Payment;
 import com.smartshopping.paymentservice.event.OrderCreatedEvent;
-import com.smartshopping.paymentservice.event.PaymentProcessedEvent;
-import com.smartshopping.paymentservice.producer.PaymentEventProducer;
-import com.smartshopping.paymentservice.repository.PaymentRepository;
-
-import java.util.Optional;
-import java.util.UUID;
-
-import org.springframework.kafka.annotation.DltHandler;
-import org.springframework.kafka.annotation.RetryableTopic;
 
 @Service
 public class OrderEventConsumer {
 
-    private final PaymentRepository paymentRepository;
-    private final PaymentEventProducer paymentEventProducer;
+    private static final Logger log =
+            LoggerFactory.getLogger(OrderEventConsumer.class);
 
-    public OrderEventConsumer(
-            PaymentRepository paymentRepository,
-            PaymentEventProducer paymentEventProducer) {
+    private static final String CORRELATION_ID =
+            "X-Correlation-Id";
 
-        this.paymentRepository = paymentRepository;
-        this.paymentEventProducer = paymentEventProducer;
-    }
     @RetryableTopic(
             attempts = "3",
             dltTopicSuffix = ".DLT"
@@ -36,67 +30,58 @@ public class OrderEventConsumer {
             topics = "order-created",
             groupId = "payment-group"
     )
-    public void consumeOrderCreatedEvent(OrderCreatedEvent event) {
+    public void consumeOrderCreatedEvent(
+            OrderCreatedEvent event,
+            ConsumerRecord<String, OrderCreatedEvent> record) {
 
-        System.out.println("===== PAYMENT SERVICE =====");
+        String correlationId = null;
 
-        System.out.println("Event ID: " + event.getEventId());
-        System.out.println("Order ID: " + event.getOrderId());
-        System.out.println("Amount: " + event.getTotalPrice());
+        if (record.headers().lastHeader(CORRELATION_ID) != null) {
 
-        // Check duplicate payment
-        Optional<Payment> existingPayment =
-                paymentRepository.findByOrderId(event.getOrderId());
-
-        if (existingPayment.isPresent()) {
-
-            System.out.println(
-                    "Payment already exists for Order ID: "
-                            + event.getOrderId());
-
-            return;
+            correlationId = new String(
+                    record.headers()
+                            .lastHeader(CORRELATION_ID)
+                            .value(),
+                    StandardCharsets.UTF_8);
         }
 
-        // Create payment
-        Payment payment = new Payment();
+        try {
 
-        payment.setOrderId(event.getOrderId());
-        payment.setAmount(event.getTotalPrice());
-        payment.setPaymentMethod("UPI");
-        payment.setStatus("SUCCESS");
+            MDC.put(
+                    CORRELATION_ID,
+                    correlationId != null
+                            ? correlationId
+                            : "UNKNOWN");
 
-        Payment savedPayment = paymentRepository.save(payment);
+            log.info(
+                    "Order created event received. "
+                            + "Correlation ID: {}, "
+                            + "Event ID: {}, "
+                            + "Order ID: {}, "
+                            + "Amount: {}",
+                    correlationId,
+                    event.getEventId(),
+                    event.getOrderId(),
+                    event.getTotalPrice());
 
-        System.out.println(
-                "Payment created successfully: "
-                        + savedPayment.getId());
+            log.info(
+                    "Order received. Waiting for payment request.");
 
-        // Create payment event
-        PaymentProcessedEvent paymentEvent =
-                new PaymentProcessedEvent(
-                        UUID.randomUUID().toString(),
-                        savedPayment.getId(),
-                        savedPayment.getOrderId(),
-                        savedPayment.getAmount(),
-                        savedPayment.getStatus()
-                );
+        } finally {
 
-        paymentEventProducer.sendPaymentProcessedEvent(paymentEvent);
-
-        System.out.println("===========================");
+            MDC.remove(CORRELATION_ID);
+        }
     }
-    
+
     @DltHandler
-    public void handleDlt(OrderCreatedEvent event) {
+    public void handleDlt(
+            OrderCreatedEvent event) {
 
-        System.err.println("===== PAYMENT DLT =====");
-
-        System.err.println(
-                "Failed Order ID: " + event.getOrderId());
-
-        System.err.println(
-                "Event ID: " + event.getEventId());
-
-        System.err.println("=======================");
+        log.error(
+                "Payment DLT received. "
+                        + "Failed Order ID: {}, "
+                        + "Event ID: {}",
+                event.getOrderId(),
+                event.getEventId());
     }
 }

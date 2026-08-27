@@ -91,4 +91,20 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.CONFLICT)
                 .body(response);
     }
+    
+    @ExceptionHandler(ProductServiceUnavailableException.class)
+    public ResponseEntity<ValidationErrorResponse> handleProductServiceUnavailable(
+            ProductServiceUnavailableException ex) {
+
+        ValidationErrorResponse response =
+                new ValidationErrorResponse();
+
+        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+        response.setMessage(ex.getMessage());
+        response.setTimestamp(LocalDateTime.now());
+
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(response);
+    }
 }

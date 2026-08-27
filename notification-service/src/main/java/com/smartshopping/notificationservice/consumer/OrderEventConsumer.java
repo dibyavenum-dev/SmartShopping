@@ -1,5 +1,7 @@
 package com.smartshopping.notificationservice.consumer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.RetryableTopic;
 import org.springframework.stereotype.Service;
@@ -10,49 +12,66 @@ import com.smartshopping.notificationservice.repository.ProcessedEventRepository
 
 @Service
 public class OrderEventConsumer {
-	
-	private final ProcessedEventRepository processedEventRepository;
 
-	public OrderEventConsumer(
-	        ProcessedEventRepository processedEventRepository) {
-	    this.processedEventRepository = processedEventRepository;
-	}
-	@RetryableTopic(
-	        attempts = "3",
-	        dltTopicSuffix = ".DLT"
-	)
-	@KafkaListener(
-	        topics = "order-created",
-	        groupId = "notification-group"
-	)
-	public void consumeOrderCreatedEvent(OrderCreatedEvent event) {
+    private static final Logger log =
+            LoggerFactory.getLogger(OrderEventConsumer.class);
 
-	    System.out.println("===== ORDER CREATED EVENT =====");
-	    System.out.println("Event ID: " + event.getEventId());
-	    System.out.println("Order ID: " + event.getOrderId());
+    private final ProcessedEventRepository processedEventRepository;
 
-	    // Check duplicate event
-	    if (processedEventRepository.existsById(event.getEventId())) {
+    public OrderEventConsumer(
+            ProcessedEventRepository processedEventRepository) {
 
-	        System.out.println(
-	                "Duplicate event ignored: "
-	                + event.getEventId());
+        this.processedEventRepository =
+                processedEventRepository;
+    }
 
-	        return;
-	    }
+    @RetryableTopic(
+            attempts = "3",
+            dltTopicSuffix = ".DLT"
+    )
+    @KafkaListener(
+            topics = "order-created",
+            groupId = "notification-group"
+    )
+    public void consumeOrderCreatedEvent(
+            OrderCreatedEvent event) {
 
-	    // Process event
-	    System.out.println("Processing notification...");
+        log.info(
+                "Order created event received. "
+                        + "Event ID: {}, Order ID: {}",
+                event.getEventId(),
+                event.getOrderId());
 
-	    // Mark event as processed
-	    ProcessedEvent processedEvent =
-	            new ProcessedEvent(
-	                    event.getEventId(),
-	                    java.time.LocalDateTime.now().toString()
-	            );
+        // Check duplicate event
+        if (processedEventRepository
+                .existsById(event.getEventId())) {
 
-	    processedEventRepository.save(processedEvent);
+            log.info(
+                    "Duplicate event ignored: {}",
+                    event.getEventId());
 
-	    System.out.println("Event processed successfully");
-	}
+            return;
+        }
+
+        // Process event
+        log.info(
+                "Processing notification for Order ID: {}",
+                event.getOrderId());
+
+        // Mark event as processed
+        ProcessedEvent processedEvent =
+                new ProcessedEvent(
+                        event.getEventId(),
+                        java.time.LocalDateTime
+                                .now()
+                                .toString());
+
+        processedEventRepository.save(
+                processedEvent);
+
+        log.info(
+                "Event processed successfully. "
+                        + "Event ID: {}",
+                event.getEventId());
+    }
 }

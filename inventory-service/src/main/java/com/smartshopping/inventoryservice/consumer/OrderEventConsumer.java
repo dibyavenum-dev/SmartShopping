@@ -1,79 +1,134 @@
 package com.smartshopping.inventoryservice.consumer;
 
+import java.nio.charset.StandardCharsets;
+
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.annotation.RetryableTopic;
 import org.springframework.stereotype.Service;
 
 import com.smartshopping.inventoryservice.event.InventoryFailedEvent;
 import com.smartshopping.inventoryservice.event.OrderCreatedEvent;
 import com.smartshopping.inventoryservice.exception.InsufficientStockException;
-import com.smartshopping.inventoryservice.exception.InventoryNotFoundException;
 import com.smartshopping.inventoryservice.producer.InventoryEventProducer;
 import com.smartshopping.inventoryservice.service.InventoryService;
 
 @Service
 public class OrderEventConsumer {
-	private final InventoryService inventoryService;
-	private final InventoryEventProducer inventoryEventProducer;
 
-	public OrderEventConsumer(
-	        InventoryService inventoryService,
-	        InventoryEventProducer inventoryEventProducer) {
+    private static final Logger log =
+            LoggerFactory.getLogger(OrderEventConsumer.class);
 
-	    this.inventoryService = inventoryService;
-	    this.inventoryEventProducer = inventoryEventProducer;
-	}
-	
-	@RetryableTopic(
-	        attempts = "3",
-	        dltTopicSuffix = ".DLT"
-	)
-	@KafkaListener(
-	        topics = "order-created",
-	        groupId = "inventory-group"
-	)
-	public void consumeOrderCreatedEvent(
-	        OrderCreatedEvent event) {
+    private static final String CORRELATION_ID =
+            "X-Correlation-Id";
 
-	    try {
+    private final InventoryService inventoryService;
+    private final InventoryEventProducer inventoryEventProducer;
 
-	        inventoryService.reserveStock(
-	                event.getProductId(),
-	                event.getQuantity());
+    public OrderEventConsumer(
+            InventoryService inventoryService,
+            InventoryEventProducer inventoryEventProducer) {
 
-	        System.out.println(
-	                "Stock reserved successfully for Product ID: "
-	                        + event.getProductId());
+        this.inventoryService = inventoryService;
+        this.inventoryEventProducer = inventoryEventProducer;
+    }
 
-	    } catch (InsufficientStockException
-	            | InventoryNotFoundException e) {
+    @KafkaListener(
+            topics = "order-created",
+            groupId = "inventory-group"
+    )
+    public void consumeOrderCreatedEvent(
+            OrderCreatedEvent event,
+            ConsumerRecord<String, OrderCreatedEvent> record) {
 
-	        InventoryFailedEvent failedEvent =
-	                new InventoryFailedEvent(
-	                        event.getOrderId(),
-	                        event.getProductId(),
-	                        event.getQuantity(),
-	                        e.getMessage());
+        String correlationId = null;
 
-	        inventoryEventProducer
-	                .sendInventoryFailedEvent(failedEvent);
+        if (record.headers().lastHeader(CORRELATION_ID) != null) {
 
-	        // Re-throw so @RetryableTopic handles the failure
-	        throw e;
-	    }
-	}
-	
-	@DltHandler
-	public void handleDlt(OrderCreatedEvent event) {
+            correlationId = new String(
+                    record.headers()
+                            .lastHeader(CORRELATION_ID)
+                            .value(),
+                    StandardCharsets.UTF_8);
+        }
 
-	    System.err.println("===== INVENTORY DLT =====");
-	    System.err.println(
-	            "Failed Order ID: " + event.getOrderId());
-	    System.err.println(
-	            "Product ID: " + event.getProductId());
-	    System.err.println(
-	            "Quantity: " + event.getQuantity());
-	    System.err.println("========================");
-	}
+        try {
+
+            MDC.put(
+                    CORRELATION_ID,
+                    correlationId != null
+                            ? correlationId
+                            : "UNKNOWN");
+
+            log.info(
+                    "Order created event received. "
+                            + "Correlation ID: {}, "
+                            + "Order ID: {}, "
+                            + "Product ID: {}, "
+                            + "Quantity: {}",
+                    correlationId,
+                    event.getOrderId(),
+                    event.getProductId(),
+                    event.getQuantity());
+
+            try {
+
+                inventoryService.reserveStock(
+                        event.getProductId(),
+                        event.getQuantity());
+
+                log.info(
+                        "Stock reserved successfully. "
+                                + "Product ID: {}, Quantity: {}",
+                        event.getProductId(),
+                        event.getQuantity());
+
+            } catch (InsufficientStockException e) {
+
+                log.warn(
+                        "Inventory reservation failed. "
+                                + "Order ID: {}, Product ID: {}, "
+                                + "Quantity: {}, Reason: {}",
+                        event.getOrderId(),
+                        event.getProductId(),
+                        event.getQuantity(),
+                        e.getMessage());
+
+                InventoryFailedEvent failureEvent =
+                        new InventoryFailedEvent(
+                                event.getOrderId(),
+                                event.getProductId(),
+                                event.getQuantity(),
+                                e.getMessage());
+
+                inventoryEventProducer
+                        .sendInventoryFailedEvent(
+                                failureEvent);
+
+                log.info(
+                        "Inventory failed event published. "
+                                + "Order ID: {}",
+                        event.getOrderId());
+            }
+
+        } finally {
+
+            MDC.remove(CORRELATION_ID);
+        }
+    }
+
+    @DltHandler
+    public void handleDlt(
+            OrderCreatedEvent event) {
+
+        log.error(
+                "Inventory DLT received. "
+                        + "Order ID: {}, Product ID: {}, Quantity: {}",
+                event.getOrderId(),
+                event.getProductId(),
+                event.getQuantity());
+    }
 }

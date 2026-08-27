@@ -1,53 +1,52 @@
-package com.smartshopping.paymentservice.producer;
-
-import java.nio.charset.StandardCharsets;
+package com.smartshopping.orderservice.producer;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
-import com.smartshopping.paymentservice.event.PaymentProcessedEvent;
+import com.smartshopping.orderservice.event.OrderPaymentFailedEvent;
 
 @Service
-public class PaymentEventProducer {
+public class OrderFailureEventProducer {
 
     private static final Logger log =
-            LoggerFactory.getLogger(PaymentEventProducer.class);
+            LoggerFactory.getLogger(OrderFailureEventProducer.class);
 
     private static final String TOPIC =
-            "payment-processed";
+            "order-payment-failed";
 
     private static final String CORRELATION_ID =
             "X-Correlation-Id";
 
-    private final KafkaTemplate<String, PaymentProcessedEvent> kafkaTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    public PaymentEventProducer(
-            KafkaTemplate<String, PaymentProcessedEvent> kafkaTemplate) {
+    public OrderFailureEventProducer(
+            KafkaTemplate<String, Object> kafkaTemplate) {
 
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    public void sendPaymentProcessedEvent(
-            PaymentProcessedEvent event,
-            String correlationId) {
+    public void sendOrderPaymentFailedEvent(
+            OrderPaymentFailedEvent event) {
 
-        ProducerRecord<String, PaymentProcessedEvent> record =
+        String correlationId =
+                MDC.get(CORRELATION_ID);
+
+        ProducerRecord<String, Object> record =
                 new ProducerRecord<>(
                         TOPIC,
                         event.getOrderId().toString(),
-                        event
-                );
+                        event);
 
         if (correlationId != null &&
                 !correlationId.isBlank()) {
 
             record.headers().add(
                     CORRELATION_ID,
-                    correlationId.getBytes(
-                            StandardCharsets.UTF_8));
+                    correlationId.getBytes());
         }
 
         kafkaTemplate.send(record)
@@ -56,7 +55,7 @@ public class PaymentEventProducer {
                     if (exception != null) {
 
                         log.error(
-                                "Failed to send payment event. "
+                                "Failed to send order payment failed event. "
                                         + "Order ID: {}",
                                 event.getOrderId(),
                                 exception);
@@ -64,14 +63,20 @@ public class PaymentEventProducer {
                     } else {
 
                         log.info(
-                                "Payment event sent successfully. "
+                                "Order payment failed event sent successfully. "
                                         + "Correlation ID: {}, "
                                         + "Order ID: {}, "
+                                        + "Product ID: {}, "
+                                        + "Quantity: {}, "
+                                        + "Reason: {}, "
                                         + "Topic: {}, "
                                         + "Partition: {}, "
                                         + "Offset: {}",
                                 correlationId,
                                 event.getOrderId(),
+                                event.getProductId(),
+                                event.getQuantity(),
+                                event.getReason(),
                                 result.getRecordMetadata().topic(),
                                 result.getRecordMetadata().partition(),
                                 result.getRecordMetadata().offset());

@@ -1,5 +1,7 @@
 package com.smartshopping.inventoryservice.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.smartshopping.inventoryservice.entity.Inventory;
@@ -9,6 +11,9 @@ import com.smartshopping.inventoryservice.repository.InventoryRepository;
 
 @Service
 public class InventoryService {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(InventoryService.class);
 
     private final InventoryRepository inventoryRepository;
 
@@ -24,10 +29,10 @@ public class InventoryService {
 
         Inventory inventory =
                 inventoryRepository.findByProductId(productId)
-                .orElseThrow(() ->
-                new InventoryNotFoundException(
-                        "Inventory not found for product: "
-                                + productId));
+                        .orElseThrow(() ->
+                                new InventoryNotFoundException(
+                                        "Inventory not found for product: "
+                                                + productId));
 
         if (inventory.getAvailableQuantity() < quantity) {
 
@@ -40,5 +45,32 @@ public class InventoryService {
                 inventory.getAvailableQuantity() - quantity);
 
         inventoryRepository.save(inventory);
+
+        log.info(
+                "Stock reserved successfully. Product ID: {}, Quantity: {}",
+                productId,
+                quantity);
+    }
+
+    public void releaseStock(
+            Long productId,
+            int quantity) {
+
+        Inventory inventory =
+                inventoryRepository.findByProductId(productId)
+                        .orElseThrow(() ->
+                                new InventoryNotFoundException(
+                                        "Inventory not found for product: "
+                                                + productId));
+
+        inventory.setAvailableQuantity(
+                inventory.getAvailableQuantity() + quantity);
+
+        inventoryRepository.save(inventory);
+
+        log.info(
+                "Stock released successfully. Product ID: {}, Quantity: {}",
+                productId,
+                quantity);
     }
 }
